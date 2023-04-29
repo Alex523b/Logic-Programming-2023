@@ -1,10 +1,37 @@
 % Αλέξανδρος Ντιβέρης - 1115201900136
+/*activity(a1, act(0,3)).
+activity(a2, act(4,6)).
+activity(a3, act(1,2)).*/
+
+activity(a01, act(0,3)).
+activity(a02, act(0,4)).
+activity(a03, act(1,5)).
+activity(a04, act(4,6)).
+activity(a05, act(6,8)).
+activity(a06, act(6,9)).
+activity(a07, act(9,10)).
+activity(a08, act(9,13)).
+activity(a09, act(11,14)).
+activity(a10, act(12,15)).
+activity(a11, act(14,17)).
+activity(a12, act(16,18)).
+activity(a13, act(17,19)).
+activity(a14, act(18,20)).
+activity(a15, act(19,20)).
 
 assignment(NP, MT, ASP, ASA) :-
     findall(Aid, activity(Aid, _), AIds), % Gather all activities in list AIds
     assign(AIds, NP, MT, ASA),
-    compute_initial_ASP(NP, InitialASP),
-    compute_final_ASP(ASA, InitialASP, ASP).
+    compute_ASP(ASA, 1, NP, ASP).
+
+compute_ASP(_, PId, NP, []):-
+    PId > NP.
+compute_ASP(ASA, PId, NP, [PId-APIds-Sum|Rest]):-
+    NewPId is PId + 1,
+    PId =< NP,
+    findall(AId, member(AId-PId, ASA), APIds),
+    total_time(APIds, Sum),
+    compute_ASP(ASA, NewPId, NP, Rest).
 
 assign([], _, _, []).
 assign([AId|AIds], NP, MT, [AId-PId|Assignment]) :-
@@ -12,8 +39,8 @@ assign([AId|AIds], NP, MT, [AId-PId|Assignment]) :-
     between(1, NP, PId), % Select a person PId for activity AId
     activity(AId, act(Ab, Ae)),
     findall(X, member(X-PId, Assignment), APIds), % Gather in list APIds so far activities of PId
-    valid(Ab, Ae, APIds, 0, MT),
-    check_duplicate(PId, Assignment, 1, APIds, Ab, Ae, MT).% Is current assignment consistent with previous ones?
+    valid(Ab, Ae, APIds, 0, MT), % Is current assignment consistent with previous ones?
+    check_duplicate(PId, Assignment, 1, APIds, Ab, Ae, MT).
 
 total_time([], Sum, Sum).
 total_time([APId|APIds], TmpSum, Sum) :-
@@ -24,7 +51,8 @@ total_time([APId|APIds], TmpSum, Sum) :-
 check_duplicate(PId, _, PId, _, _, _, _).
 check_duplicate(PId, Assignment, PId2, APIds, Ab, Ae, MT) :-
     findall(X, member(X-PId2, Assignment), APIds2),
-    (\+ valid(Ab, Ae, APIds2, 0, MT);
+    % If a person with pid smaller than PId can handle an assignment, then consider this solution duplicate
+    (\+ valid(Ab, Ae, APIds2, 0, MT); 
     total_time(APIds, 0, Sum),
     total_time(APIds2, 0, Sum2),
     Sum =\= Sum2), !,
@@ -38,31 +66,6 @@ valid(As1, Ae1, [APId|APIds], Sum, MT) :-
     (As2 > Ae1; As1 > Ae2), % Assure that there is no overlap between assigned activities
     UpdatedSum is Sum + Ae2 - As2,
     valid(As1, Ae1, APIds, UpdatedSum, MT).
-    
-update_ASP(PId, AId, L, UpdatedL) :-
-    update_ASP(PId, AId, L, [], TempUpdatedL),
-    reverse(TempUpdatedL, UpdatedL).
-update_ASP(_, _, [], L, L).
-update_ASP(PId, AId, [PId - X - Y|T], SoFarL, UpdatedL) :- % Append information of assigned activity to final ASP
-    activity(AId, act(S, E)),
-    NewDuration is Y + E - S,
-    update_ASP(PId, AId, T, [PId - [AId|X] - NewDuration|SoFarL], UpdatedL).
-update_ASP(PId, AId, [PId2 - X - Y|T], SoFarL, UpdatedL) :-
-    PId =\= PId2,
-    update_ASP(PId, AId, T, [PId2 - X - Y|SoFarL], UpdatedL).
-
-compute_initial_ASP(NP, InitializedASP) :- % Before assigning persons to activities, the ASP has the following format: [PId - [] - 0, PId2 - [] - 0, ..., PIdNP - [] - 0]
-    all_between(1, NP, InitialASP),
-    fill_initial_ASP(InitialASP, InitializedASP).
-
-fill_initial_ASP([], []).
-fill_initial_ASP([PId|L], [PId - [] - 0|T]) :-
-    fill_initial_ASP(L, T).
-
-compute_final_ASP([], L, L).
-compute_final_ASP([AId - PId|RestAssignedActivities], InitialASP, ASP) :-
-    update_ASP(PId, AId, InitialASP, UpdatedASP),
-    compute_final_ASP(RestAssignedActivities, UpdatedASP, ASP).
 
 between(L, U, L) :-
     L =< U.
