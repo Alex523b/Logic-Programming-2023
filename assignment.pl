@@ -73,10 +73,3 @@ between(L, U, X) :-
     L < U,
     L1 is L + 1,
     between(L1, U, X).
-
-all_between(L, U, [L|X]) :-
-    L =< U,
-    L1 is L + 1,
-    all_between(L1, U, X).
-all_between(L, U, []) :-
-    L > U.
