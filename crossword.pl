@@ -12,15 +12,20 @@ crossword(S) :-
     append(RowVariables, ColumnVariables, Variables),
     findall(Word, words(Word), Words),
     flatten_list(Words, FlattedWords),
-    solution(Variables, FlattedWords, S),
+    combine_soldom(Variables, FlattedWords, SolDom),
+    solution(SolDom),
+    
+    find_words_assigned_to_vars(Variables, S),
 
     print_crossword(Matrix), !.
 
-solution([], _, []).
-solution([X|Others], Words, [Word|Rest]) :-
-    solution(Others, Words, Rest),
-    choose_word(Words, Word),
-    valid_choice(Word, X).
+solution([]).
+solution(SolDom1) :-
+    mrv_var(SolDom1, X-Domain, SolDom2),
+    choose_word(Domain, Word),
+    valid_choice(Word, X),
+    update_domains(Word, SolDom2, SolDom3), 
+    solution(SolDom3).
 
 choose_word(Words, Word) :-
     member(Word, Words).
@@ -28,6 +33,39 @@ choose_word(Words, Word) :-
 valid_choice(Word, X) :-
     remove_index_info(X, Xs),
     name(Word, Xs).
+
+combine_soldom([], _, []).
+combine_soldom([X|Rest], Domain, [X-Domain2|SolDom]) :-
+    length(X, N),
+    findall(Y, (member(Y, Domain), name(Y, Word), length(Word, N)), Domain2),
+    combine_soldom(Rest, Domain, SolDom).
+
+mrv_var([X-Domain], X-Domain, []).
+mrv_var([X1-Domain1|SolDom1], X-Domain, SolDom3) :-
+   mrv_var(SolDom1, X2-Domain2, SolDom2),
+   length(Domain1, N1),
+   length(Domain2, N2),
+   (N1 < N2 ->
+      (X = X1,
+       Domain = Domain1,
+       SolDom3 = SolDom1) ;
+      (X = X2,
+       Domain = Domain2,
+       SolDom3 = [X1-Domain1|SolDom2])).
+
+update_domains(_, [], []).
+update_domains(X, [Y-Domain1|SolDom1], [Y-Domain2|SolDom2]) :-
+   update_domain(X, Domain1, Domain2),
+   update_domains(X, SolDom1, SolDom2).
+
+update_domain(X, Domain1, Domain2) :-
+    remove_if_exists(X, Domain1, Domain2).
+
+remove_if_exists(_, [], []).
+remove_if_exists(X, [X|List], List) :-
+    !.
+remove_if_exists(X, [Y|List1], [Y|List2]) :-
+    remove_if_exists(X, List1, List2).
 
 compute_matrix(Matrix) :-
     dimension(M),
@@ -135,3 +173,9 @@ remove_vars_of_length_one([T|Rest], L) :-
     remove_vars_of_length_one(Rest, L).
 remove_vars_of_length_one([T|Rest], [T|L]) :-
     remove_vars_of_length_one(Rest, L).
+
+find_words_assigned_to_vars([],[]).
+find_words_assigned_to_vars([X|Rest], [Word|T]) :-
+    remove_index_info(X, UpdatedX),
+    name(Word, UpdatedX),
+    find_words_assigned_to_vars(Rest, T).
