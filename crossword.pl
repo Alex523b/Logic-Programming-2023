@@ -1,31 +1,7 @@
-dimension(5).
-black(1,3).
-black(2,3).
-black(3,2).
-black(4,3).
-black(5,1).
-black(5,5).
+% Αλέξανδρος Ντιβέρης - 1115201900136
 
-split_words_in_row([], [[]]).    
-split_words_in_row([###|T], [[]|T2]) :-
-    split_words_in_row(T, T2).
-split_words_in_row([H|T], [[H|T2]|T3]) :-
-    H \= ###,
-    split_words_in_row(T, [T2|T3]).
-
-transpose(_, I, []) :-
-    dimension(M),
-    I > M.
-transpose(Matrix, I, [Column|T]) :-
-    UpdatedI is I + 1,
-    nth_column(Matrix, I, Column),
-    transpose(Matrix, UpdatedI, T).
-
-make_matrix(Matrix) :-
-    dimension(M),
-    length(Matrix, M),
-    make_rows(M, Matrix),
-    
+crossword(S) :-
+    compute_matrix(Matrix),
     find_variables(Matrix, 1, TempRowVariables),
     filter_variables(TempRowVariables, RowVariables),
 
@@ -34,61 +10,29 @@ make_matrix(Matrix) :-
     filter_variables(TempColumnVariables, ColumnVariables),
 
     append(RowVariables, ColumnVariables, Variables),
-    printM(Matrix),
-    writeln(RowVariables),
-    writeln(ColumnVariables).
+    findall(Word, words(Word), Words),
+    flatten_list(Words, FlattedWords),
+    solution(Variables, FlattedWords, S),
 
-filter_variables(Variables, UpdatedColumnWords) :-
-    remove_empty_vars(Variables, TempColumnWords),
-    flatten_list(TempColumnWords, UpdatedColumnWords).
+    print_crossword(Matrix), !.
 
-flatten_list([], []).
-flatten_list([[T|T1]|Rest], [T|Bla]) :- !,
-    flatten_list([T1|Rest], Bla).
-flatten_list([T|Rest], Bla) :-
-    length(T, L),
-    L =< 1,
-    flatten_list(Rest, Bla).
+solution([], _, []).
+solution([X|Others], Words, [Word|Rest]) :-
+    solution(Others, Words, Rest),
+    choose_word(Words, Word),
+    valid_choice(Word, X).
 
-remove_empty_vars([], []).
-remove_empty_vars([[]|Rest], Bla) :-
-    !,
-    remove_empty_vars(Rest, Bla).
-remove_empty_vars([T|Rest], [T|Bla]) :-
-    remove_empty_vars(Rest, Bla).
+choose_word(Words, Word) :-
+    member(Word, Words).
 
-find_variables(_, I, []) :-
+valid_choice(Word, X) :-
+    remove_index_info(X, Xs),
+    name(Word, Xs).
+
+compute_matrix(Matrix) :-
     dimension(M),
-    I > M.
-find_variables(Matrix, I, [WordsInRow|Words]) :-
-    nth_row(Matrix, I, Row),
-    split_words_in_row(Row, SplitRow),
-    remove_one_character_word(SplitRow, WordsInRow),
-    UpdatedI is I + 1,
-    find_variables(Matrix, UpdatedI, Words).
-
-remove_one_character_word([], []).
-remove_one_character_word([T|Rest], NewL) :-
-    length(T, L),
-    L =< 1, !,
-    remove_one_character_word(Rest, NewL).
-remove_one_character_word([T|Rest], [T|NewL]) :-
-    remove_one_character_word(Rest, NewL).
-
-nth_row([H|_], 1, H) :- !.
-nth_row([_|T], I, X) :-
-    I1 is I - 1,
-    nth_row(T, I1, X).
-
-nth_column([], _, []).
-nth_column([H|T], I, [R|X]) :-
-    nth_row(H, I, R), 
-    nth_column(T, I, X).
-
-printM([]).
-printM([H|L]) :-
-    writeln(H),
-    printM(L).
+    length(Matrix, M),
+    make_rows(M, Matrix).
 
 make_rows(_, []).
 make_rows(M, [Row|Matrix]) :-
@@ -110,3 +54,84 @@ fill_row([X-RowIndex-ColumnIndex|T], RowIndex, [X-RowIndex-ColumnIndex|Rest]) :-
     length(T, L),
     ColumnIndex is M - L, % same reason with row index computation
     fill_row(T, RowIndex, Rest).
+
+transpose(_, I, []) :-
+    dimension(M),
+    I > M.
+transpose(Matrix, I, [Column|T]) :- % the rows of the transposed matrix are the columns of the original one
+    UpdatedI is I + 1,
+    nth_column(Matrix, I, Column),
+    transpose(Matrix, UpdatedI, T).
+
+print_crossword([]).
+print_crossword([H|L]) :-
+    print_row(H),
+    writeln(''),
+    print_crossword(L).
+
+print_row([]).
+print_row([###|Rest]) :-
+    printf("###", []),
+    print_row(Rest).
+print_row([X-_-_|Rest]) :-
+    printf(" %c ", [X]),
+    print_row(Rest).
+
+nth_row([H|_], 1, H) :- !.
+nth_row([_|T], I, X) :-
+    I1 is I - 1,
+    nth_row(T, I1, X).
+
+nth_column([], _, []).
+nth_column([H|T], I, [R|X]) :-
+    nth_row(H, I, R), 
+    nth_column(T, I, X).
+
+find_variables(_, I, []) :-
+    dimension(M),
+    I > M.
+find_variables(Matrix, I, [Variables|RestVariables]) :-
+    nth_row(Matrix, I, Row),
+    split_variables_in_row(Row, TempVariables),
+    remove_vars_of_length_one(TempVariables, Variables), % each word consists of at least 2 letters
+    UpdatedI is I + 1,
+    find_variables(Matrix, UpdatedI, RestVariables).
+
+filter_variables(Variables, FilteredVariables) :-
+    remove_empty_vars(Variables, TempVariables), % discard empty sublists
+    flatten_list(TempVariables, FilteredVariables). % there is no need to separate variables based on where they lie in the matrix
+
+split_variables_in_row([], [[]]).    
+split_variables_in_row([###|T], [[]|T2]) :-
+    !,
+    split_variables_in_row(T, T2).
+split_variables_in_row([H|T], [[H|T2]|T3]) :-
+    split_variables_in_row(T, [T2|T3]).
+
+remove_index_info([], []).
+remove_index_info([H-_-_|T], [H|Rest]) :-
+    remove_index_info(T,Rest).
+
+flatten_list([], []).
+flatten_list([[H|T]|T1], [H|Rest]) :-
+    !,
+    flatten_list([T|T1], Rest).
+flatten_list([H|T], List) :-
+    length(H, N),
+    N =< 1,
+    flatten_list(T, List).
+
+remove_empty_vars([], []).
+remove_empty_vars([[]|T], Rest) :-
+    !,
+    remove_empty_vars(T, Rest).
+remove_empty_vars([H|T], [H|Rest]) :-
+    remove_empty_vars(T, Rest).
+
+remove_vars_of_length_one([], []).
+remove_vars_of_length_one([T|Rest], L) :-
+    length(T, N),
+    N =< 1,
+    remove_vars_of_length_one(Rest, L).
+remove_vars_of_length_one([T|Rest], [T|L]) :-
+    remove_vars_of_length_one(Rest, L).
