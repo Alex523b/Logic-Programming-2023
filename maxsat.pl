@@ -16,7 +16,7 @@ maxsat(NV, NC, D, F, S, M) :-
     Cost #= sum(CostList), % sum of CostList equals the number of clauses that cannot be evaluated as true (that's why their cost is non-zero)
 
     bb_min(search(S, 0, most_constrained, indomain, complete, []), Cost, bb_options{strategy:restart}),
-    M is LUF - Cost. % To get the optimal number of clauses that can be evaluated as true, simply subtract the number of clauses with cost from the amount of non-empty clauses
+    M is LUF - Cost. % to get the optimal number of clauses that can be evaluated as true, simply subtract the number of clauses with cost from the amount of non-empty clauses
 
 eval_clauses([], _, []).
 eval_clauses([Clause|RestClauses], S, [ClauseCost|RestCosts]) :-
