@@ -1,94 +1,120 @@
 % Αλέξανδρος Ντιβέρης - 1115201900136
 
 :- lib(ic).
-/*activity(a1, act(0,3)).
-activity(a2, act(1,2)).
-activity(a3, act(4,6)).*/
+:- lib(branch_and_bound).
+:- compile(activity).
 
-activity(a01, act(0,3)).
-activity(a02, act(0,4)).
-activity(a03, act(1,5)).
-activity(a04, act(4,6)).
-activity(a05, act(6,8)).
-activity(a06, act(6,9)).
-activity(a07, act(9,10)).
-activity(a08, act(9,13)).
-activity(a09, act(11,14)).
-activity(a10, act(12,15)).
-activity(a11, act(14,17)).
-activity(a12, act(16,18)).
-activity(a13, act(17,19)).
-activity(a14, act(18,20)).
-activity(a15, act(19,20)).
+assignment_csp(NP, ST, ASP, ASA) :-
+    findall(AId, activity(AId,_), Activities),
+    length(Activities, NumberOfActivities),
 
-bla([]).
-bla([AId-PId|AIds]) :-
-    constraint(AId-PId, AIds),
-    bla(AIds).
+    length(Solution, NumberOfActivities),
+    Solution #:: 1..NP,
 
-constraint(_, []).
-constraint(AId-PId, [AId2-PId2|Rest]) :-
-    activity(AId, act(S, E)),
-    activity(AId2, act(S2, E2)),
-    ((S > E2 ; S2 < E) -> PId #\= PId2 ; true),
-    constraint(AId-PId, Rest).
+    make_tmpl(Activities, Solution, Assignments),
+    compute_average_duration(NP, Activities, AverageDuration),
+    assign(NumberOfActivities, NP, ST, AverageDuration, Assignments, Costs),
 
-get_pids([], []).
-get_pids([_-PId|Rest], [PId|T]) :-
-    get_pids(Rest, T).
+    compute_ASA(Assignments, [], ASA),
+    compute_ASP(NP, Assignments, ASP),
 
-total_time(Xs, Sum) :-
-    total_time(Xs, [], Sum).
+    search(Solution, 0, most_constrained, indomain_middle, complete, []).
 
-total_time([], Sum, Sum).
-total_time([H|T], TmpSum, Sum) :-
-    activity(H, act(S,E)),
+assignment_opt(NF, NP, MT, F, T, ASP, ASA) :-
+    findall(AId, activity(AId, _), Activities),
+    (NF > 0 ->
+        fill_activities(NF, Activities, ActivitiesForAssignment)
+        ;
+        ActivitiesForAssignment = Activities
+    ).
+    %bb_min(search(Solution, 0, first_fail, indomain, complete, []), Cost, bb_options{timeout: T}).
+
+make_tmpl([], [], []).
+make_tmpl([AId|RestOfActivities], [PId|RestPersons], [AId - PId|RestAssignedActivites]) :-
+    make_tmpl(RestOfActivities, RestPersons, RestAssignedActivites).
+
+compute_average_duration(NP, Activities, AverageDuration) :-
+    compute_duration(Activities, 0, D),
+    AverageDuration is round(D / NP).
+
+compute_duration([], D, D).
+compute_duration([AId|RestDuration], Time, D) :-
+    activity(AId, act(S,E)),
     Duration is E - S,
-    total_time(T, [Duration|TmpSum], Sum).
-assignment_csp(NP, MT, ASP, ASA) :-
-    findall(AId, activity(AId, _), AIds),
-    compute_initial_ASA(AIds, NP, ASA),
-    
-    bla(ASA),
-    get_pids(ASA, PIds),
-    findall(X, member(X-2, ASA), Xs),
-    total_time(Xs, Sum),
-    writeln(Sum),
-    sum(Sum) #=< MT,
-    findall(X, member(X-1, ASA), Xs),
-    total_time(Xs, Sum2),
-    writeln(Sum2),
-    sum(Sum2) #=< MT,
-    labeling(PIds),
+    NewTime is Time + Duration,
+    compute_duration(RestDuration, NewTime, D).
+
+assign(_, _, _, _, [], []).
+assign(Position, NP, ST, A, [AId-PId|RestAssignedActivities], Costs) :-
+    NewPosition is Position - 1,
+    assign(NewPosition, NP, ST, A, RestAssignedActivities, Costs),
+    activity(AId, act(S,E)),
+    (Position < NP -> 
+        (constrain_assignment(Position, S, E, 0, ST, RestAssignedActivities), PId #= Position)
+        ;
+        (constrain_assignment(PId, S, E, 0, ST, RestAssignedActivities))
+    ).
+
+constrain_assignment(_, S, E, Time, ST, []) :-
+    Duration is E - S,
+    NewTime is Time + Duration,
+    NewTime =< ST.
+constrain_assignment(PId, S, E, Time, ST, [_-Selected|RestAssignedActivities]) :-
+    PId #\= Selected,
+    constrain_assignment(PId, S, E, Time, ST, RestAssignedActivities).
+constrain_assignment(PId, S, E, Time, ST, [AId-Selected|RestAssignedActivities]) :-
+    PId #= Selected,
+    activity(AId, act(S1, E1)),
+    E < S1,
+    Duration is E1 - S1,
+    NewTime is Time + Duration,
+    NewTime =< ST,
+    constrain_assignment(PId, S, E, NewTime, ST, RestAssignedActivities).
+
+compute_ASA([], ASA, ASA).
+compute_ASA([AId-PId|RestAssigned], SoFarASA, ASA) :-
+    append(SoFarASA, [AId-PId], NewSoFarASA),
+    compute_ASA(RestAssigned, NewSoFarASA, ASA).
+
+compute_ASP(NP, Assignments, ASP) :-
     compute_initial_ASP(NP, InitializedASP),
-    compute_final_ASP(ASA, InitializedASP, ASP).
+    compute_final_ASP(Assignments, InitializedASP, ASP).
 
 compute_initial_ASP(NP, InitializedASP) :- % Before assigning persons to activities, the ASP has the following format: [PId - [] - 0, PId2 - [] - 0, ..., PIdNP - [] - 0]
     all_between(1, NP, InitialASP),
     fill_initial_ASP(InitialASP, InitializedASP).
+
+all_between(L, U, [L|X]) :-
+    L =< U,
+    L1 is L + 1,
+    all_between(L1, U, X).
+all_between(L, U, []) :-
+    L > U.
+
+% the following predicates have also been used in the original assignment problem
 
 fill_initial_ASP([], []).
 fill_initial_ASP([PId|L], [PId - [] - 0|T]) :-
     fill_initial_ASP(L, T).
 
 compute_final_ASP([], L, L).
-compute_final_ASP([AId - PId|RestAssignedActivities], InitialASP, ASP) :-
+compute_final_ASP([AId-PId|RestAssignedActivities], InitialASP, ASP) :-
     update_ASP(PId, AId, InitialASP, UpdatedASP),
     compute_final_ASP(RestAssignedActivities, UpdatedASP, ASP).
-
-compute_initial_ASA([], _, []).
-compute_initial_ASA([AId|AIds], NP, [AId-PId|T]) :-
-    PId #:: 1..NP,
-    compute_initial_ASA(AIds, NP, T).
 
 update_ASP(PId, AId, L, UpdatedL) :-
     update_ASP(PId, AId, L, [], TempUpdatedL),
     reverse(TempUpdatedL, UpdatedL).
 update_ASP(_, _, [], L, L).
-update_ASP(PId, AId, [PId - X - Y|T], SoFarL, UpdatedL) :- % Append information of assigned activity to final ASP
+update_ASP(PId, AId, [PId - X - Y|T], SoFarL, UpdatedL) :- % Append information of assignment activity to final ASP
     activity(AId, act(S, E)),
     NewDuration is Y + E - S,
     update_ASP(PId, AId, T, [PId - [AId|X] - NewDuration|SoFarL], UpdatedL).
 update_ASP(PId, AId, [PId2 - X - Y|T], SoFarL, UpdatedL) :-
     PId =\= PId2,
     update_ASP(PId, AId, T, [PId2 - X - Y|SoFarL], UpdatedL).
+
+fill_activities(0, _, []).
+fill_activities(N, [AId|RestOfActivities], [AId|RestAIds]) :-
+    NewN is N - 1,
+    fill_activities(NewN, RestOfActivities, RestAIds).
