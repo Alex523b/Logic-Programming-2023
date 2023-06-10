@@ -31,12 +31,13 @@ constrain_row_views(Solution, L1, L2) :-
     constrain_rear_row_view(Solution, L2).
 
 constrain_front_row_view([], []).
-constrain_front_row_view([_|T], [0|Rest]) :-
-    !,
-    constrain_front_row_view(T, Rest).
 constrain_front_row_view([H|T], [V|Rest]) :-
-    maximize(H, [], MaxH),
-    nvalue(V, MaxH), % if nvalue MaxH contains V different values, then V skyscrapers are visible from one side
+    (V =\= 0 ->
+        maximize(H, [], MaxH),
+        nvalue(V, MaxH) % if nvalue MaxH contains V different values, then V skyscrapers are visible from one side
+        ;
+        true
+    ),
     constrain_front_row_view(T, Rest).
 
 constrain_rear_row_view([], []).
@@ -46,10 +47,9 @@ constrain_rear_row_view([H|T], [V|Rest]) :-
     constrain_rear_row_view(T, Rest).
 
 maximize([], _, []).
-maximize([H|L], SoFarHList, [MaxH|T]) :-
-    append(SoFarHList, [H], NewSoFarHList),
-    MaxH #= max(NewSoFarHList),
-    maximize(L, NewSoFarHList, T).
+maximize([H|L], HList, [MaxH|T]) :-
+    MaxH #= max([H|HList]),
+    maximize(L, [H|HList], T).
 
 % the following predicates have also been used in crossword puzzle exercise
 transpose(_, I, M, []) :-
